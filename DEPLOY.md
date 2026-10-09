@@ -31,9 +31,11 @@ move existing entries. A new domain has separate browser storage.
 
 ## Enable automatic Google Sheets sync on Vercel
 
-1. Open [your spreadsheet](https://docs.google.com/spreadsheets/d/1wXUkmMr08thE6H77S1SPtjCx-aSrrgXTXSMdbyGA6jk/edit?gid=1741868527)
-   and select **Extensions → Apps Script**.
-2. Paste `google-sheets/Code.gs` into the script project's `Code.gs`.
+1. Open [Google Apps Script](https://script.google.com/) using the Google account
+   that can edit [your spreadsheet](https://docs.google.com/spreadsheets/d/1wXUkmMr08thE6H77S1SPtjCx-aSrrgXTXSMdbyGA6jk/edit?gid=1741868527).
+   Create a new standalone project named **Hermit Tracker Sync**, or reuse the
+   tracker project you already created. The spreadsheet ID is included in the code.
+2. Paste `google-sheets/Code.gs` into that project's `Code.gs` and save.
    The Vercel connection does **not** need an `Index.html` in Apps Script.
 3. Generate a random connection secret locally:
 
@@ -79,6 +81,22 @@ The spreadsheet uses a **Tracker Daily** tab and a hidden **Tracker Data** tab.
 The existing linked tab is preserved. Each date updates its own row, including
 working Sundays, learning and free time. Failed writes remain queued locally and
 retry when connected. Editing the same date from two devices uses the last write.
+
+## Download a complete month
+
+On the website, choose **Download month**, select the month and year, and click
+**Download Excel**. The workbook has five tabs: **Daily totals**, **Activities**,
+**Summary**, **Learning topics**, and **Adjustments**. Activity details contain
+every saved start/end time, exact minutes, topics and tasks, including retained
+entries on leave and holidays. Totals exclude those inactive entries and apply
+manual adjustments. An empty month still includes every calendar date.
+
+Choose **Month backup** for a JSON file containing just the selected month's
+complete saved records. It works offline and can be imported with **Restore**.
+Downloads use the records loaded on this device; sign in to Google Sheets first
+to load cloud records from another device. On Vercel and local preview, both
+formats work offline after the page has loaded. The build includes the spreadsheet
+library from `vendor/`; keep that folder when uploading files to GitHub.
 
 ## Local preview and checks
 

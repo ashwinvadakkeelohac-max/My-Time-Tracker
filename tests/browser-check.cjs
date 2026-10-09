@@ -49,6 +49,42 @@ async function main() {
   assert.equal(await evaluate("loadData().days['2026-10-05'].entries.filter(e=>e.category==='free').reduce((s,e)=>s+duration(e),0)"),70);
   const duplicateIds = await evaluate("[...document.querySelectorAll('[id]')].map(n=>n.id).filter((id,i,a)=>a.indexOf(id)!==i)");
   assert.deepEqual(duplicateIds,[]);
+  const downloadsDirectory = fs.mkdtempSync(path.join(os.tmpdir(),'hermit-monthly-download-'));
+  await cdp('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:downloadsDirectory});
+  const waitForDownload = async filename => {
+    const target = path.join(downloadsDirectory,filename);
+    for (let attempt = 0; attempt < 50; attempt++) { if (fs.existsSync(target) && !fs.existsSync(target + '.crdownload')) return target; await delay(100); }
+    throw new Error('Monthly download did not finish: ' + filename + ' ' + JSON.stringify({files:fs.readdirSync(downloadsDirectory),ui:await evaluate("({toast:document.getElementById('toast').textContent,valid:document.getElementById('downloadForm').checkValidity(),library:XLSX.version,month:document.getElementById('downloadMonthSelect').value,year:document.getElementById('downloadYear').value})"),errors}));
+  };
+  await evaluate("closeEntry(); openDownloadDialog()");
+  assert.equal(await evaluate("document.getElementById('downloadDialog').open"),true);
+  assert.equal(await evaluate("document.getElementById('downloadMonthSelect').value"),'9');
+  for (let attempt = 0; attempt < 50; attempt++) { if (await evaluate('!!window.XLSX')) break; await delay(100); }
+  assert.equal(await evaluate('!!window.XLSX'),true,'Excel library did not load');
+  await cdp('Network.enable');
+  await cdp('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+  await evaluate("document.getElementById('downloadForm').requestSubmit()");
+  const workbookPath = await waitForDownload('Hermits_Time_Tracker_2026-10.xlsx');
+  const workbookBase64 = fs.readFileSync(workbookPath).toString('base64');
+  const exported = await evaluate(`(() => {
+    const workbook = XLSX.read(${JSON.stringify(workbookBase64)},{type:'base64'});
+    return {names:workbook.SheetNames,daily:XLSX.utils.sheet_to_json(workbook.Sheets['Daily totals'],{header:1}),activities:XLSX.utils.sheet_to_json(workbook.Sheets.Activities,{header:1}),hoursType:workbook.Sheets['Daily totals'].F5.t};
+  })()`);
+  assert.deepEqual(exported.names,['Daily totals','Activities','Summary','Learning topics','Adjustments']);
+  assert.equal(exported.daily.find(row => row[0] === '2026-10-04')[5],1);
+  assert.equal(exported.daily.at(-2)[0],'2026-10-31'); assert.equal(exported.daily.length,33);
+  assert.ok(exported.activities.some(row => row[3] === '10:00' && row[4] === '11:00' && row[7] === 60));
+  assert.equal(exported.hoursType,'n');
+  await evaluate("openDownloadDialog(); downloadMonth('json')");
+  const monthBackupPath = await waitForDownload('Hermits_Time_Tracker_2026-10_Backup.json');
+  const monthBackup = JSON.parse(fs.readFileSync(monthBackupPath,'utf8'));
+  assert.deepEqual(Object.keys(monthBackup),['tracker_2026_10']);
+  assert.equal(monthBackup.tracker_2026_10.days['2026-10-04'].entries.length,5);
+  // Downloading a different month does not move or replace the visible calendar.
+  await evaluate("openDownloadDialog(); document.getElementById('downloadMonthSelect').value='1'; document.getElementById('downloadYear').value='2024'; downloadMonth('xlsx')");
+  await waitForDownload('Hermits_Time_Tracker_2024-02.xlsx');
+  assert.equal(await evaluate('currentYear'),2026); assert.equal(await evaluate('currentMonth'),9);
+  await cdp('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   await evaluate("closeEntry(); window.scrollTo(0,0)");
   const desktop = path.join(os.tmpdir(),'personal-tracker-desktop.png');
   fs.writeFileSync(desktop,Buffer.from((await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:true})).data,'base64'));
@@ -57,6 +93,9 @@ async function main() {
   assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile page has horizontal overflow');
   const mobile = path.join(os.tmpdir(),'personal-tracker-mobile.png');
   fs.writeFileSync(mobile,Buffer.from((await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:true})).data,'base64'));
+  await evaluate('openDownloadDialog()');
+  assert.ok(await evaluate("document.getElementById('downloadDialog').scrollWidth <= document.getElementById('downloadDialog').clientWidth"),'Monthly download dialog has horizontal overflow');
+  await evaluate("document.getElementById('downloadDialog').close()");
   await evaluate("selectDay('2026-10-04')");
   assert.ok(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'Mobile editor has horizontal overflow');
   await evaluate("switchTab('summary')"); assert.doesNotMatch(await evaluate("document.getElementById('summaryGrid').textContent"),/NaN|Infinity/);
@@ -99,7 +138,8 @@ async function main() {
   assert.equal(await evaluate('cloudAuthenticated'),false);
   await evaluate('window.fetch = window.realFetchForTest');
   assert.deepEqual(errors,[]);
-  console.log('PASS real-browser Sunday, no-batch split, persistence, mobile layout and Vercel sign-in/sync/disconnect checks');
+  console.log('PASS real-browser Sunday, no-batch split, actual Excel and JSON downloads, mobile layout and Vercel sign-in/sync/disconnect checks');
+  console.log('Verified monthly workbook: ' + workbookPath);
   console.log('Desktop screenshot: ' + desktop); console.log('Mobile screenshot: ' + mobile);
   await cdp('Browser.close').catch(() => {}); socket.close(); clearTimeout(qaTimeout);
 }

@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).find(s => s.includes('const MONTHS'));
 const nodes = new Map();
 function node(id) {
-  if (!nodes.has(id)) nodes.set(id, { innerHTML: '', textContent: '', className: '', value: '', dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, focus() {}, scrollIntoView() {}, showModal() {}, close() {} });
+  if (!nodes.has(id)) nodes.set(id, { innerHTML: '', textContent: '', className: '', value: '', dataset: {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, focus() {}, scrollIntoView() {}, reportValidity: () => true, showModal() { this.open = true; }, close() { this.open = false; } });
   return nodes.get(id);
 }
 const stored = {};
@@ -17,13 +17,20 @@ const localStorage = {
   removeItem: k => { delete stored[k]; }
 };
 const sheets = [];
+const workbookDownloads = [], backupDownloads = [];
+let backupBlob;
 const context = vm.createContext({
   console, Date, Map, Set, JSON, Math, Number, String, Object, Array,
   localStorage, navigator: { onLine: true },
-  document: { getElementById: node, querySelectorAll: () => [], addEventListener() {} },
+  document: { getElementById: node, querySelectorAll: () => [], addEventListener() {}, createElement: () => ({click() { backupDownloads.push({filename:this.download,blob:backupBlob}); }}) },
   window: { addEventListener() {}, matchMedia: () => ({ matches: false }), XLSX: true },
   setTimeout: () => 1, clearTimeout() {}, confirm: () => true, prompt: () => null,
-  XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: data => ({ data }), book_append_sheet: (wb, sheet, name) => sheets.push({ name, sheet }) }, writeFile() {} }
+  Blob, URL: {createObjectURL(blob) {backupBlob = blob; return 'blob:month-backup';},revokeObjectURL() {}},
+  XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: data => {
+    const sheet = {data};
+    data.forEach((row,r) => row.forEach((value,c) => { if (value != null) sheet[String.fromCharCode(65 + c) + (r + 1)] = {t:typeof value === 'number' ? 'n' : 's',v:value}; }));
+    return sheet;
+  }, book_append_sheet: (wb, sheet, name) => sheets.push({ name, sheet }) }, writeFile: (workbook,filename) => workbookDownloads.push({workbook,filename}) }
 });
 new vm.Script(script).runInContext(context);
 const run = expression => vm.runInContext(expression, context);
@@ -99,8 +106,61 @@ test('Excel exports include Sunday and every numeric category in the correct col
   run('exportExcel()');
   const daily = sheets[0].sheet.data;
   const sunday = daily.find(r => r[0] === '2026-10-04');
-  assert.equal(sunday.length, 11); assert.equal(sunday[2], 'working'); assert.equal(sunday[5], 1); assert.equal(sunday[8], 1); assert.equal(sunday[10], 3.5);
-  assert.equal(daily.at(-1).length,11); assert.equal(typeof daily.at(-1)[8], 'number');
+  assert.equal(sunday.length, 15); assert.equal(sunday[2], 'working'); assert.equal(sunday[5], 1); assert.equal(sunday[8], 1); assert.equal(sunday[10], 3.5);
+  assert.equal(daily.at(-1).length,15); assert.equal(typeof daily.at(-1)[8], 'number');
+  assert.deepEqual(sheets.map(s => s.name),['Daily totals','Activities','Summary','Learning topics','Adjustments']);
+  assert.equal(sheets[0].sheet.F6.z,'0.00'); assert.equal(sheets[2].sheet.E2.z,'0.0%');
+});
+
+const historicMonth = {days:{
+  '2024-02-04':{status:'working',important:true,task:'Review monthly plan',manualMisc:0.25,manualFree:0.5,entries:[
+    {start:'10:00',end:'10:35',category:'teaching',topic:'Batch A'},
+    {start:'10:35',end:'11:20',category:'studying',topic:'=SUM(A1:A2)'},
+    {start:'11:20',end:'12:00',category:'pending_n',topic:null}
+  ]},
+  '2024-02-05':{status:'leave',important:false,task:'Retained note',manualMisc:1,manualFree:0.25,entries:[{start:'10:00',end:'12:00',category:'studying',topic:'Excluded topic'}]}
+}};
+stored.tracker_2024_02 = JSON.stringify(historicMonth);
+test('Monthly report selects historical data, includes leap day and preserves the visible month', () => {
+  const report = plain('buildMonthlyReport(2024,1)'), daily = report.tables[0].rows;
+  assert.equal(daily.length,31); assert.equal(daily.at(-2)[0],'2024-02-29');
+  const working = daily.find(r => r[0] === '2024-02-04');
+  assert.equal(working[5],0.5); assert.equal(working[6],0.25); assert.equal(working[8],0.5);
+  assert.equal(working[10],110 / 60); assert.equal(working[11],'Review monthly plan'); assert.equal(working[12],'Yes');
+  assert.equal(daily.find(r => r[0] === '2024-02-05')[10],0);
+  assert.equal(daily.at(-1)[10],working[10]);
+  assert.equal(run('currentYear'),2026); assert.equal(run('currentMonth'),9);
+});
+test('Activity and adjustment sheets preserve exact raw times and explain applied totals', () => {
+  const report = plain('buildMonthlyReport(2024,1)'), activities = report.tables[1].rows, adjustments = report.tables[4].rows;
+  assert.equal(activities.length,5);
+  const learning = activities.find(r => r[6] === '=SUM(A1:A2)');
+  assert.deepEqual(learning.slice(3,5),['10:35','11:20']); assert.equal(learning[7],45); assert.equal(learning[9],'00:45');
+  assert.equal(activities.find(r => r[5].includes('No batch'))[10],'No');
+  assert.equal(activities.find(r => r[2] === 'leave')[10],'No');
+  assert.deepEqual(adjustments.filter(r => r[0] === '2024-02-04').map(r => r[5]),[15,30]);
+  assert.ok(adjustments.filter(r => r[0] === '2024-02-05').every(r => r[5] === 0));
+  assert.equal(report.tables[3].rows.length,2); assert.equal(report.tables[3].rows[1][3],30);
+});
+test('Workbook keeps topic text as text and uses numeric hours with filters', () => {
+  sheets.length = 0; run('exportExcel(2024,1)');
+  assert.equal(workbookDownloads.at(-1).filename,'Hermits_Time_Tracker_2024-02.xlsx');
+  assert.equal(sheets[3].sheet.A2.t,'s'); assert.equal(sheets[3].sheet.A2.v,'=SUM(A1:A2)'); assert.equal(sheets[3].sheet.A2.f,undefined);
+  assert.equal(sheets[3].sheet.E2.t,'n'); assert.equal(sheets[3].sheet.E2.v,0.5);
+  assert.equal(sheets[0].sheet['!autofilter'].ref,'A1:O30');
+});
+test('Empty monthly reports have every calendar date and safe percentages', () => {
+  const report = plain('buildMonthlyReport(2025,1)');
+  assert.equal(report.tables[0].rows.length,30); assert.equal(report.tables[1].rows.length,1);
+  assert.ok(report.tables[2].rows.slice(1,6).every(r => r[4] === 0));
+  assert.throws(() => run('buildMonthlyReport(2026,12)')); assert.throws(() => run('buildMonthlyReport(2026.5,1)'));
+});
+test('Month download starts at the visible month and JSON contains only the selected month', () => {
+  run('openDownloadDialog()'); assert.equal(node('downloadDialog').open,true);
+  assert.equal(node('downloadMonthSelect').value,'9'); assert.equal(node('downloadYear').value,'2026');
+  node('downloadYear').value = '2024'; node('downloadMonthSelect').value = '1';
+  run("downloadMonth('json')"); assert.equal(node('downloadDialog').open,false);
+  assert.equal(backupDownloads.at(-1).filename,'Hermits_Time_Tracker_2024-02_Backup.json');
 });
 test('Backup validation rejects impossible dates and malformed entries', () => {
   assert.throws(() => run("validateBackup({tracker_2026_02:{days:{'2026-02-30':{entries:[]}}}})"));
@@ -179,6 +239,12 @@ test('Apps Script bridge requires the secret and disables the direct HTML data c
 });
 
 async function checkHostedSync() {
+  const monthBackup = JSON.parse(await backupDownloads.at(-1).blob.text());
+  assert.deepEqual(Object.keys(monthBackup),['tracker_2024_02']);
+  assert.deepEqual(monthBackup.tracker_2024_02,historicMonth);
+  context.monthBackupForTest = monthBackup;
+  assert.equal(run('validateBackup(monthBackupForTest).length'),1);
+  console.log('PASS Selected month backup preserves full records and can be restored');
   const key = 'tracker_2026_10', date = '2026-10-04';
   const cached = { days: { [date]: sunday } };
   const remote = { days: { [date]: { entries: [], status:'holiday' } } };

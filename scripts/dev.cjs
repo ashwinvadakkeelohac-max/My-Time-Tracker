@@ -17,7 +17,9 @@ http.createServer(async (req,res) => {
     } catch { if (!res.writableEnded) res.status(500).json({error:'Could not process that request.'}); }
     return;
   }
-  if (!['/','/index.html'].includes(url.pathname)) { res.writeHead(404); res.end('Not found'); return; }
-  res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
-  fs.createReadStream(path.join(root,'index.html')).pipe(res);
+  const files = {'/':['index.html','text/html'], '/index.html':['index.html','text/html'], '/vendor/xlsx.full.min.js':['vendor/xlsx.full.min.js','text/javascript'], '/vendor/SheetJS-LICENSE.txt':['vendor/SheetJS-LICENSE.txt','text/plain']};
+  const file = files[url.pathname];
+  if (!file) { res.writeHead(404); res.end('Not found'); return; }
+  res.writeHead(200, {'Content-Type':file[1] + '; charset=utf-8','Cache-Control':'no-store'});
+  fs.createReadStream(path.join(root,file[0])).pipe(res);
 }).listen(port, '127.0.0.1', () => console.log(`Tracker preview: http://127.0.0.1:${port}`));

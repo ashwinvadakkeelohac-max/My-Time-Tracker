@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#080b16">
 <meta name="description" content="Hermit's Time Tracker: a neon workspace for batches, learning, free time and daily work hours.">
 <title>Hermit's Time Tracker // NEON</title>
-<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="vendor/xlsx.full.min.js" onerror="if (window.google &amp;&amp; google.script &amp;&amp; google.script.run) { this.onerror = null; this.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; }"></script>
 <style>
 :root {
   --bg: #080b16; --surface: #101627; --surface2: #172039; --border: #2b3654;
@@ -223,7 +223,7 @@ dialog { border-radius: 3px 18px 3px 3px; border-top-color: var(--blue); box-sha
     <button class="btn ghost" onclick="backupData()">Backup</button>
     <button class="btn ghost" onclick="document.getElementById('restoreFile').click()">Restore</button>
     <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="restoreData(event)" aria-label="Restore tracker backup">
-    <button class="btn" onclick="exportExcel()">Export Excel ↗</button>
+    <button class="btn" onclick="openDownloadDialog()">Download month ↓</button>
     <button class="btn primary" onclick="openSheetsDialog()">Google Sheets ↗</button>
   </div>
 </header>
@@ -256,6 +256,19 @@ dialog { border-radius: 3px 18px 3px 3px; border-top-color: var(--blue); box-sha
   <div class="entry-header"><h2 id="sheetsTitle">Your tracker, in Google Sheets</h2><button class="entry-close" onclick="document.getElementById('sheetsDialog').close()" aria-label="Close Google Sheets setup">×</button></div>
   <div id="sheetsDialogContent"></div>
   <div class="dialog-footer"><button class="btn" onclick="document.getElementById('sheetsDialog').close()">Close</button></div>
+</dialog>
+<dialog id="downloadDialog" aria-labelledby="downloadTitle">
+  <div class="entry-header"><h2 id="downloadTitle">Download your month</h2><button class="entry-close" onclick="document.getElementById('downloadDialog').close()" aria-label="Close monthly download">×</button></div>
+  <p>Choose a month. Your Excel workbook includes every date, activity start and end times, learning topics, tasks, adjustments and totals.</p>
+  <form id="downloadForm" onsubmit="event.preventDefault(); downloadMonth('xlsx')">
+    <div class="form-row" style="margin-top:18px">
+      <label class="field">Month<select class="form-input" id="downloadMonthSelect" required></select></label>
+      <label class="field">Year<input class="form-input" id="downloadYear" type="number" min="1900" max="9999" step="1" required></label>
+    </div>
+    <p>Hours are numeric so you can calculate with them. Activity details also include exact minutes and durations.</p>
+    <p>A month backup saves the complete records as JSON and works offline. Use Restore to import it later.</p>
+    <div class="dialog-footer"><button class="btn ghost" type="button" onclick="downloadMonth('json')">Month backup</button><button class="btn primary" type="submit">Download Excel ↓</button></div>
+  </form>
 </dialog>
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 <script>
@@ -299,7 +312,7 @@ function canSyncSheets() { return isGoogleHosted || cloudConfigured; }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function getStorageKey(y = currentYear, m = currentMonth) { return `tracker_${y}_${String(m + 1).padStart(2, '0')}`; }
 function getDateKey(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
-function getDaysInMonth() { return new Date(currentYear, currentMonth + 1, 0).getDate(); }
+function getDaysInMonth(year = currentYear, month = currentMonth) { return new Date(year, month + 1, 0).getDate(); }
 function getDayOfWeek(dk) { const [y, m, d] = dk.split('-').map(Number); return new Date(y, m - 1, d).getDay(); }
 function isWeekend(dk) { return [0, 6].includes(getDayOfWeek(dk)); }
 function getSchedule(dk) { return isWeekend(dk) ? WEEKEND_SLOTS : MFR_SLOTS; }
@@ -366,11 +379,11 @@ function learningSessions(day) {
   const adjusted = Math.max(0, raw - Math.max(0, Number(day.manualMisc) || 0) * 60);
   return entries.map(e => ({ topic: e.topic || 'General learning', minutes: raw ? duration(e) * adjusted / raw : 0 })).filter(e => e.minutes > 0);
 }
-function getMonthlyTotals() {
-  const data = loadData(), totals = emptyTotals(), topics = Object.create(null);
+function getMonthlyTotals(year = currentYear, month = currentMonth) {
+  const data = loadData(getStorageKey(year,month)), totals = emptyTotals(), topics = Object.create(null);
   let workingDays = 0;
-  for (let d = 1; d <= getDaysInMonth(); d++) {
-    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk];
+  for (let d = 1; d <= getDaysInMonth(year,month); d++) {
+    const dk = getDateKey(year, month, d), day = data.days[dk];
     if (getStatus(day, dk) !== 'working') continue;
     workingDays++;
     const dt = getDayTotals(day, dk);
@@ -539,12 +552,12 @@ function clearDay(dk) {
   if (!confirm('Clear this day’s activities, adjustments and task?')) return;
   const data = loadData(); delete data.days[dk]; editingSlot = null; saveData(data); render(); showToast('Day cleared.');
 }
-function getMonthRows() {
-  const data = loadData(), rows = [];
-  for (let d = 1; d <= getDaysInMonth(); d++) {
-    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk], status = getStatus(day, dk), totals = getDayTotals(day, dk);
+function getMonthRows(year = currentYear, month = currentMonth) {
+  const data = loadData(getStorageKey(year,month)), rows = [];
+  for (let d = 1; d <= getDaysInMonth(year,month); d++) {
+    const dk = getDateKey(year, month, d), day = data.days[dk], status = getStatus(day, dk), totals = getDayTotals(day, dk);
     const activities = status === 'working' ? [...(day?.entries || [])].sort((a,b) => timeToMinutes(a.start) - timeToMinutes(b.start)).map(e => `${e.start}–${e.end} ${CATEGORIES[e.category] || e.category}${e.topic ? ': ' + e.topic : ''}`).join('\n') : '';
-    rows.push({ date: dk, day: DAYS[(getDayOfWeek(dk) + 6) % 7], status: status || 'Not logged', activities, totals });
+    rows.push({ date: dk, day: DAYS[(getDayOfWeek(dk) + 6) % 7], status: status || 'Not logged', activities, totals, task: day?.task || '', important: !!day?.important, manualMisc: Number(day?.manualMisc) || 0, manualFree: Number(day?.manualFree) || 0 });
   }
   return rows;
 }
@@ -615,19 +628,93 @@ async function restoreData(event) {
     months.forEach(([key,data]) => saveData(data,key,true)); render(); showToast('Backup restored.');
   } catch (error) { showToast(error.message || 'Could not restore that backup.',true); }
 }
-function exportExcel() {
-  if (!window.XLSX) { showToast('Excel export needs an internet connection to load. Your tracker data is still saved.',true); return; }
-  const monthName = `${MONTHS[currentMonth]} ${currentYear}`, { totals: t, topics } = getMonthlyTotals(), logged = loggedMinutes(t), rows = getMonthRows();
-  const sheet = [['Date','Day','Day type','Activities','Batch hours','Learning hours','Misc hours','Break hours','Free hours','Work hours','Logged hours']];
-  rows.forEach(r => sheet.push([r.date,r.day,r.status,r.activities,...[r.totals.teaching,r.totals.studying,r.totals.misc,r.totals.break,r.totals.free,workMinutes(r.totals),loggedMinutes(r.totals)].map(v => v / 60)]));
-  sheet.push(['MONTHLY TOTAL','','','',...[t.teaching,t.studying,t.misc,t.break,t.free,workMinutes(t),logged].map(v => v / 60)]);
-  const summary = [['Category','Hours','% of logged time'],...Object.keys(t).map(c => [CATEGORIES[c],t[c] / 60,logged ? t[c] / logged : 0]),[],['Work hours',workMinutes(t) / 60],['Logged hours',logged / 60],[],['Learning topic','Hours'],...Object.entries(topics).map(([topic,minutes]) => [topic,minutes / 60])];
-  const wb = XLSX.utils.book_new(), daily = XLSX.utils.aoa_to_sheet(sheet);
-  daily['!cols'] = [{ wch: 12 },{ wch: 7 },{ wch: 12 },{ wch: 60 },...Array.from({length:7},() => ({wch:15}))];
-  for (let row = 2; row <= sheet.length; row++) for (let column = 4; column <= 10; column++) { const cell = daily[`${String.fromCharCode(65 + column)}${row}`]; if (cell?.t === 'n') cell.z = '0.00'; }
-  const summarySheet = XLSX.utils.aoa_to_sheet(summary);
-  for (let row = 2; row <= 6; row++) if (summarySheet[`C${row}`]) summarySheet[`C${row}`].z = '0.0%';
-  XLSX.utils.book_append_sheet(wb,daily,monthName); XLSX.utils.book_append_sheet(wb,summarySheet,'Summary'); XLSX.writeFile(wb,`${monthName.replace(' ','_')}_Tracker.xlsx`);
+function openDownloadDialog() {
+  document.getElementById('downloadMonthSelect').innerHTML = MONTHS.map((name,index) => `<option value="${index}">${name}</option>`).join('');
+  document.getElementById('downloadMonthSelect').value = String(currentMonth);
+  document.getElementById('downloadYear').value = String(currentYear);
+  document.getElementById('downloadDialog').showModal();
+}
+function downloadMonth(format) {
+  if (!document.getElementById('downloadForm').reportValidity()) return;
+  const year = Number(document.getElementById('downloadYear').value), month = Number(document.getElementById('downloadMonthSelect').value);
+  try {
+    validateExportMonth(year,month);
+    if (format === 'xlsx') { if (!exportExcel(year,month)) return; }
+    else if (format === 'json') {
+      const key = getStorageKey(year,month), backup = { [key]: loadData(key) };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));
+      const link = document.createElement('a'); link.href = url; link.download = `Hermits_Time_Tracker_${year}-${String(month + 1).padStart(2,'0')}_Backup.json`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url),1000);
+    } else throw new Error('Choose an Excel workbook or month backup.');
+    document.getElementById('downloadDialog').close();
+    showToast(`Downloaded ${MONTHS[month]} ${year}.`);
+  } catch (error) { showToast(error.message || 'Could not download this month. Your records are still saved.',true); }
+}
+function validateExportMonth(year,month) {
+  if (!Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 0 || month > 11) throw new Error('Choose a valid month and year from 1900 to 9999.');
+}
+function exportDuration(minutes) { return minutesToTime(Math.round(minutes)); }
+function buildMonthlyReport(year = currentYear,month = currentMonth) {
+  validateExportMonth(year,month);
+  const monthName = `${MONTHS[month]} ${year}`, data = loadData(getStorageKey(year,month)), rows = getMonthRows(year,month);
+  const { totals: t, workingDays } = getMonthlyTotals(year,month), logged = loggedMinutes(t);
+  const daily = [['Date','Day','Day type','Activities','Batch hours','Learning hours','Misc hours','Break hours','Free hours','Work hours','Logged hours','Important task','Task active','Manual misc hours requested','Manual free hours requested']];
+  rows.forEach(r => daily.push([r.date,r.day,r.status,r.activities,...[r.totals.teaching,r.totals.studying,r.totals.misc,r.totals.break,r.totals.free,workMinutes(r.totals),loggedMinutes(r.totals)].map(v => v / 60),r.task,r.important ? 'Yes' : 'No',r.manualMisc,r.manualFree]));
+  daily.push(['MONTHLY TOTAL','','','',...[t.teaching,t.studying,t.misc,t.break,t.free,workMinutes(t),logged].map(v => v / 60),'','','','']);
+  const activities = [['Date','Day','Day type','Start time','End time','Activity','Topic','Duration minutes','Duration hours','Duration HH:MM','Included in totals','Important task']];
+  const adjustments = [['Date','Day type','Adjustment','Requested minutes','Requested hours','Applied minutes','Applied hours','Notes']];
+  const topicRecords = new Map();
+  rows.forEach(r => {
+    const day = data.days[r.date];
+    if (!day) return;
+    const working = r.status === 'working';
+    [...day.entries].sort((a,b) => timeToMinutes(a.start) - timeToMinutes(b.start)).forEach(e => {
+      const included = working && Object.hasOwn(t,e.category), minutes = duration(e);
+      activities.push([r.date,r.day,r.status,e.start,e.end,CATEGORIES[e.category] || e.category,e.topic || '',minutes,minutes / 60,exportDuration(minutes),included ? 'Yes' : 'No',r.task]);
+    });
+    const learning = day.entries.filter(e => e.category === 'studying').reduce((sum,e) => sum + duration(e),0);
+    if (r.manualMisc) {
+      const requested = r.manualMisc * 60, applied = working ? Math.min(requested,learning) : 0;
+      adjustments.push([r.date,r.status,'Learning moved to miscellaneous',requested,r.manualMisc,applied,applied / 60,working ? 'Transfers available learning time; total logged time stays the same.' : 'Excluded because this day is not working.']);
+    }
+    if (r.manualFree) {
+      const requested = r.manualFree * 60, applied = working ? requested : 0;
+      adjustments.push([r.date,r.status,'Additional free time',requested,r.manualFree,applied,applied / 60,working ? 'Adds free time without a start or end time.' : 'Excluded because this day is not working.']);
+    }
+    if (working) learningSessions(day).forEach(session => {
+      if (!topicRecords.has(session.topic)) topicRecords.set(session.topic,{minutes:0,sessions:0,dates:new Set()});
+      const topic = topicRecords.get(session.topic); topic.minutes += session.minutes; topic.sessions++; topic.dates.add(r.date);
+    });
+  });
+  const topics = [['Learning topic','Sessions','Days','Minutes','Hours','Duration HH:MM'],...[...topicRecords].sort((a,b) => b[1].minutes - a[1].minutes).map(([topic,record]) => [topic,record.sessions,record.dates.size,record.minutes,record.minutes / 60,exportDuration(record.minutes)])];
+  const summary = [['Category','Minutes','Hours','Duration HH:MM','% of logged time'],...Object.keys(t).map(category => [CATEGORIES[category],t[category],t[category] / 60,exportDuration(t[category]),logged ? t[category] / logged : 0]),[],['Work time',workMinutes(t),workMinutes(t) / 60,exportDuration(workMinutes(t))],['Logged time',logged,logged / 60,exportDuration(logged)],[],['Month',monthName],['Calendar days',rows.length],['Working days',workingDays],['Leave days',rows.filter(r => r.status === 'leave').length],['Holiday days',rows.filter(r => r.status === 'holiday').length],['Not logged days',rows.filter(r => r.status === 'Not logged').length],[],['Work time includes batch, learning and miscellaneous.'],['Logged time also includes breaks and free time.'],['Activity durations are saved times; daily totals apply manual adjustments.'],['Saved activities on leave and holidays are retained in Activities and excluded from totals.'],['Learning topic totals include the learning-to-miscellaneous adjustment.']];
+  const hourFormats = Object.fromEntries([4,5,6,7,8,9,10,13,14].map(column => [column,'0.00']));
+  return {monthName,filename:`Hermits_Time_Tracker_${year}-${String(month + 1).padStart(2,'0')}.xlsx`,tables:[
+    {name:'Daily totals',rows:daily,widths:[12,7,13,65,15,15,15,15,15,15,15,35,12,26,26],formats:hourFormats,filterRows:daily.length - 1},
+    {name:'Activities',rows:activities,widths:[12,7,13,12,12,25,35,20,18,20,20,35],formats:{7:'0.##',8:'0.00'},filterRows:activities.length},
+    {name:'Summary',rows:summary,widths:[85,24,18,20,20],formats:{1:'0.##',2:'0.00',4:'0.0%'}},
+    {name:'Learning topics',rows:topics,widths:[40,12,12,20,18,20],formats:{1:'0',2:'0',3:'0.##',4:'0.00'},filterRows:topics.length},
+    {name:'Adjustments',rows:adjustments,widths:[12,13,38,22,22,22,22,75],formats:{3:'0.##',4:'0.00',5:'0.##',6:'0.00'},filterRows:adjustments.length}
+  ]};
+}
+function exportExcel(year = currentYear,month = currentMonth) {
+  if (!window.XLSX) { showToast('The Excel library has not loaded. Reload the page or download a month backup.',true); return false; }
+  const report = buildMonthlyReport(year,month), workbook = XLSX.utils.book_new();
+  workbook.Props = {Title:`Hermit's Time Tracker — ${report.monthName}`,CreatedDate:new Date()};
+  report.tables.forEach(table => {
+    const sheet = XLSX.utils.aoa_to_sheet(table.rows);
+    sheet['!cols'] = table.widths.map(wch => ({wch}));
+    if (table.filterRows > 1) sheet['!autofilter'] = {ref:`A1:${String.fromCharCode(64 + table.rows[0].length)}${table.filterRows}`};
+    Object.entries(table.formats).forEach(([column,format]) => {
+      for (let row = 2; row <= table.rows.length; row++) {
+        const cell = sheet[`${String.fromCharCode(65 + Number(column))}${row}`];
+        if (cell?.t === 'n') cell.z = format;
+      }
+    });
+    XLSX.utils.book_append_sheet(workbook,sheet,table.name);
+  });
+  XLSX.writeFile(workbook,report.filename,{compression:true});
+  return true;
 }
 
 // Both hosting options acknowledge writes. Google credentials stay on the server.
