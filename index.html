@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#080b16">
+<meta name="description" content="Hermit's Time Tracker: a neon workspace for batches, learning, free time and daily work hours.">
+<title>Hermit's Time Tracker // NEON</title>
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #080b16; --surface: #101627; --surface2: #172039; --border: #2b3654;
+  --text: #edf3ff; --text2: #a5b0cf; --blue: #52e8ff; --green: #d0f96b;
+  --orange: #ffb878; --red: #ff7598; --purple: #ed91ff; --gray: #a5b0cf;
+  --yellow: #ffe578; --radius: 5px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 'Segoe UI', system-ui, sans-serif; }
+button, input, select { font: inherit; }
+button, a, input, select { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { opacity: .55; cursor: wait; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+a { color: var(--blue); }
+h1, h2, h3, p { margin: 0; }
+.hidden { display: none !important; }
+.header { max-width: 1600px; margin: auto; padding: 26px 32px 22px; display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { width: 44px; height: 44px; background: var(--green); color: #10251f; border-radius: 13px; display: grid; place-items: center; font-size: 24px; font-weight: 750; }
+.eyebrow { text-transform: uppercase; letter-spacing: .14em; color: var(--text2); font-size: 10px; font-weight: 600; }
+h1 { font-size: 21px; letter-spacing: -.6px; font-weight: 650; }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--border); background: var(--surface2); color: var(--text); padding: 8px 13px; border-radius: 9px; font-size: 12px; font-weight: 600; transition: background .15s, border-color .15s; }
+.btn:hover { background: #2a3541; border-color: #536374; }
+.btn.primary { background: var(--green); color: #10251f; border-color: var(--green); }
+.btn.primary:hover { background: #83e5c6; }
+.btn.teaching { color: var(--blue); }
+.btn.studying { color: var(--green); }
+.btn.free { color: var(--purple); }
+.btn.danger { color: var(--red); }
+.btn.ghost { background: transparent; }
+.workspace { max-width: 1600px; padding: 0 32px 32px; margin: auto; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0 20px; border-top: 1px solid var(--border); }
+.month-nav { display: flex; gap: 8px; align-items: center; }
+.month-nav h2 { min-width: 177px; font-size: 19px; font-weight: 600; letter-spacing: -.4px; }
+.nav-arrow { width: 34px; height: 34px; padding: 0; font-size: 17px; }
+.save-status { color: var(--text2); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.status-dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; }
+.save-status.error .status-dot { background: var(--red); }
+.save-status.pending .status-dot { background: var(--yellow); }
+.tabs { display: flex; gap: 4px; padding: 4px; width: fit-content; margin-bottom: 22px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
+.tab { padding: 8px 20px; border: 0; border-radius: 7px; background: transparent; color: var(--text2); font-size: 13px; font-weight: 600; }
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--surface2); color: var(--green); }
+.main { display: flex; gap: 22px; align-items: flex-start; }
+.panel-left { flex: 1; min-width: 0; }
+.panel-right { width: 390px; flex-shrink: 0; padding: 22px; border: 1px solid var(--border); background: var(--surface); border-radius: 18px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.month-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+.stat { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.stat-label { color: var(--text2); font-size: 11px; }
+.stat-value { font-size: 23px; font-weight: 650; letter-spacing: -.6px; margin-top: 3px; }
+.calendar-card { padding: 18px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); }
+.section-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 16px; }
+.section-heading h3 { font-size: 14px; font-weight: 600; }
+.muted { color: var(--text2); font-size: 12px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-header { font-size: 11px; color: var(--text2); text-align: center; padding: 5px 0 10px; }
+.cal-header.sunday { color: var(--purple); }
+.cal-day { border: 1px solid transparent; border-radius: 10px; background: var(--surface2); min-height: 100px; color: var(--text); padding: 10px; text-align: left; display: flex; flex-direction: column; gap: 4px; transition: border-color .15s, background .15s; }
+.cal-day:hover { border-color: #647386; background: #293440; }
+.cal-day.sunday { background: #221f32; }
+.cal-day.leave { background: #282137; }
+.cal-day.working { background: #1d2c2d; }
+.cal-day.today .day-num { color: var(--green); }
+.cal-day.today .day-num::after { content: ''; display: inline-block; margin-left: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--green); vertical-align: middle; }
+.cal-day.selected { border-color: var(--green); background: #243d37; box-shadow: inset 0 0 0 1px var(--green); }
+.cal-day.important { border-color: var(--yellow); }
+.day-num { font-size: 13px; font-weight: 650; }
+.day-stats { font-size: 10px; line-height: 1.6; }
+.day-stats span { display: block; }
+.day-tag { font-size: 10px; color: var(--text2); margin-top: auto; }
+.imp-tag { color: var(--yellow); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-size: 10px; }
+.cal-empty { min-height: 100px; }
+.calendar-footer { padding-top: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; color: var(--text2); font-size: 11px; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.legend span::before { content: ''; display: inline-block; width: 6px; height: 6px; background: currentColor; border-radius: 50%; margin-right: 5px; }
+.cat-teach { color: var(--blue); } .cat-study { color: var(--green); } .cat-misc { color: var(--orange); } .cat-free { color: var(--purple); } .cat-break { color: var(--gray); }
+.entry-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.entry-header h3 { font-size: 18px; margin-top: 3px; letter-spacing: -.4px; }
+.entry-close { border: 0; background: transparent; color: var(--text2); font-size: 20px; padding: 0 4px; }
+.status-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+.status-buttons .active { border-color: var(--green); color: var(--green); background: #233b33; }
+.notice { padding: 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text2); font-size: 12px; margin-bottom: 14px; }
+.notice strong { color: var(--text); }
+.day-overview { display: flex; flex-wrap: wrap; gap: 10px; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 11px; margin-bottom: 16px; }
+.day-overview b { font-size: 13px; display: block; }
+.slot-card { padding: 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 11px; margin-bottom: 10px; }
+.slot-card.pending { border-left: 3px solid var(--yellow); }
+.slot-card.done { border-left: 3px solid var(--green); }
+.slot-card.free-slot { border-left-color: var(--purple); }
+.slot-time { font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+.slot-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.slot-label { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.slot-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.slot-actions .btn { padding: 6px 10px; font-size: 11px; }
+.break-card { text-align: center; color: var(--text2); border: 1px dashed var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; font-size: 12px; }
+.form-row { display: flex; gap: 10px; margin-top: 10px; }
+.field { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 5px; color: var(--text2); font-size: 11px; }
+.form-input { width: 100%; min-width: 0; padding: 8px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.form-input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+.form-help { color: var(--text2); font-size: 11px; margin: 9px 0; }
+.remaining-bar { padding: 11px; background: #253027; color: var(--green); font-size: 12px; border-radius: 9px; margin: 12px 0; }
+.entry-footer { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px; }
+.adjustments { font-size: 12px; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+.adjustments summary { color: var(--text2); cursor: pointer; }
+.sheet-container { overflow: auto; border: 1px solid var(--border); border-radius: 14px; }
+.sheet-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sheet-table th { background: var(--surface2); text-align: left; padding: 14px; white-space: nowrap; color: var(--text2); font-size: 11px; }
+.sheet-table td { padding: 12px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
+.sheet-table .activity-cell { min-width: 240px; max-width: 500px; white-space: normal; font-size: 11px; }
+.sheet-table tbody tr:hover { background: var(--surface); }
+.sheet-table .total-row { background: var(--surface2); font-weight: 650; }
+.sheet-note { margin-bottom: 14px; }
+.summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.summary-card { padding: 22px; border: 1px solid var(--border); background: var(--surface); border-radius: 14px; }
+.summary-card h3 { font-size: 12px; color: var(--text2); font-weight: 500; }
+.summary-big { font-size: 34px; font-weight: 650; letter-spacing: -1px; margin: 10px 0 4px; }
+.summary-sub { font-size: 11px; color: var(--text2); }
+.topic-card { padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); margin-bottom: 12px; }
+.topic-top { display: flex; justify-content: space-between; gap: 16px; color: var(--green); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.topic-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin: 14px 0; }
+.topic-bar span { display: block; height: 100%; background: var(--green); }
+.topic-sessions { display: flex; gap: 6px; flex-wrap: wrap; }
+.topic-sessions .btn { font-size: 11px; padding: 5px 9px; }
+.empty-state { text-align: center; padding: 60px 20px; border: 1px dashed var(--border); border-radius: 14px; }
+.empty-state h3 { font-size: 17px; margin-bottom: 6px; }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--green); border-radius: 10px; padding: 12px 18px; box-shadow: 0 8px 30px #0008; z-index: 10; font-size: 13px; max-width: calc(100% - 32px); }
+.toast.error { border-color: var(--red); }
+dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 18px; padding: 26px; width: 540px; max-width: calc(100% - 24px); max-height: calc(100vh - 40px); overflow: auto; }
+dialog::backdrop { background: #060b11bb; }
+dialog h2 { font-size: 20px; }
+dialog p, dialog li { font-size: 13px; color: var(--text2); margin-top: 12px; }
+dialog li { padding-left: 4px; }
+dialog ol { padding-left: 20px; }
+dialog code { color: var(--green); }
+.dialog-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+/* Neon surfaces and angular details keep the time log readable. */
+body { background-image: radial-gradient(ellipse at 85% 0%, #9c2fff16, transparent 40%), radial-gradient(ellipse at 5% 20%, #00d9ff0b, transparent 45%), linear-gradient(#52e8ff04 1px, transparent 1px), linear-gradient(90deg, #52e8ff04 1px, transparent 1px); background-size: auto, auto, 48px 48px, 48px 48px; }
+body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 3px, #ffffff02 3px, #ffffff02 4px); pointer-events: none; z-index: 12; }
+.header { padding-top: 24px; }
+.brand-mark { border: 1px solid var(--blue); background: #52e8ff0b; color: var(--blue); border-radius: 3px 13px 3px 3px; font-family: 'Consolas', 'Courier New', monospace; box-shadow: 0 0 22px #52e8ff18, inset 0 0 18px #52e8ff0a; }
+.eyebrow { font-family: 'Consolas', 'Courier New', monospace; color: var(--blue); letter-spacing: .17em; }
+h1 { font-size: 19px; font-weight: 650; }
+.btn { border-radius: 3px 9px 3px 3px; background: #141d30; letter-spacing: .015em; }
+.btn:hover { background: #52e8ff12; border-color: var(--blue); box-shadow: 0 0 16px #52e8ff0c; }
+.btn.primary { background: var(--blue); color: #06121b; border-color: var(--blue); box-shadow: 0 0 17px #52e8ff20; }
+.btn.primary:hover { background: #a0f4ff; box-shadow: 0 0 22px #52e8ff38; }
+.hero { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 27px 30px; margin: 0 0 24px; border: 1px solid var(--border); border-left: 3px solid var(--blue); border-radius: 3px 24px 3px 3px; background: linear-gradient(110deg, #52e8ff08, #101627 48%, #ed91ff0b); position: relative; overflow: hidden; }
+.hero::after { content: ''; position: absolute; width: 260px; height: 260px; right: -90px; top: -135px; border: 1px solid #ed91ff38; transform: rotate(45deg); box-shadow: 0 0 0 35px #ed91ff04, 0 0 0 70px #ed91ff03; pointer-events: none; }
+.hero h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 750; letter-spacing: -1.5px; margin: 4px 0 6px; line-height: 1.2; }
+.hero h2 span { color: var(--blue); text-shadow: 0 0 25px #52e8ff26; }
+.hero p { color: var(--text2); font-size: 12px; }
+.hero-code { font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; line-height: 2.1; text-align: right; letter-spacing: .14em; color: var(--text2); z-index: 1; }
+.hero-code b { display: block; color: var(--purple); font-weight: 500; }
+.toolbar { border-top-color: #52e8ff28; }
+.month-nav h2 { font-family: 'Consolas', 'Courier New', monospace; font-size: 19px; }
+.save-status { font-family: 'Consolas', 'Courier New', monospace; font-size: 11px; }
+.status-dot { box-shadow: 0 0 8px currentColor; color: var(--green); }
+.tabs { border-radius: 3px 12px 3px 3px; background: #0e1425; padding: 5px; }
+.tab { border-radius: 2px 6px 2px 2px; font-family: 'Consolas', 'Courier New', monospace; }
+.tab.active { color: var(--blue); background: #52e8ff12; box-shadow: inset 0 -2px var(--blue); }
+.stat, .summary-card, .topic-card { border-radius: 3px 15px 3px 3px; background: linear-gradient(135deg, #17203980, #101627); position: relative; }
+.stat::before { content: ''; position: absolute; top: -1px; left: 15px; width: 30px; height: 2px; background: var(--blue); box-shadow: 0 0 10px #52e8ff50; }
+.stat:nth-child(2)::before { background: var(--green); } .stat:nth-child(3)::before { background: var(--purple); } .stat:nth-child(4)::before { background: var(--orange); }
+.stat-label, .summary-card h3 { font-family: 'Consolas', 'Courier New', monospace; }
+.stat-value, .summary-big { font-family: 'Consolas', 'Courier New', monospace; font-weight: 700; }
+.calendar-card { background: #101627d9; border-radius: 3px 18px 3px 3px; box-shadow: 0 15px 45px #00000025; }
+.section-heading h3 { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; letter-spacing: .02em; }
+.cal-header { font-family: 'Consolas', 'Courier New', monospace; text-transform: uppercase; letter-spacing: .07em; }
+.cal-day { border-radius: 3px 9px 3px 3px; border-color: #27324c88; background: linear-gradient(150deg, #172039, #131a2c); }
+.cal-day:hover { background: #19283c; border-color: var(--blue); box-shadow: inset 0 0 20px #52e8ff08; }
+.cal-day.sunday, .cal-day.leave { background: linear-gradient(150deg, #261c37, #191629); border-color: #ed91ff25; }
+.cal-day.working { background: linear-gradient(150deg, #203128, #131e29); border-color: #d0f96b25; }
+.cal-day.selected { background: #162c33; border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue), 0 0 15px #52e8ff15; }
+.cal-day.today .day-num { color: var(--blue); } .cal-day.today .day-num::after { background: var(--blue); box-shadow: 0 0 9px #52e8ff80; }
+.day-num { font-family: 'Consolas', 'Courier New', monospace; } .day-tag { color: #aebada; }
+.panel-right { background: linear-gradient(165deg, #162139, #101627 45%); border-radius: 3px 18px 3px 3px; border-top-color: var(--blue); box-shadow: 0 0 32px #52e8ff06; }
+.slot-card { background: #141d31; border-radius: 3px 10px 3px 3px; }
+.slot-time { font-family: 'Consolas', 'Courier New', monospace; }
+.status-buttons .active { background: #52e8ff12; color: var(--blue); border-color: var(--blue); }
+.remaining-bar { background: #d0f96b0b; border: 1px solid #d0f96b30; border-radius: 3px; }
+.form-input, .notice, .break-card, .sheet-container { border-radius: 3px 8px 3px 3px; }
+.form-input:focus { outline-color: var(--blue); }
+dialog { border-radius: 3px 18px 3px 3px; border-top-color: var(--blue); box-shadow: 0 0 60px #52e8ff12; }
+.toast { border-radius: 3px 10px 3px 3px; }
+.connection-error { color: var(--red); min-height: 18px; font-size: 12px; margin-top: 8px; }
+.cloud-footer { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+@media (min-width: 1400px) { .month-stats { grid-template-columns: repeat(6, 1fr); } .cal-day, .cal-empty { min-height: 120px; } }
+@media (max-width: 1100px) { .main { flex-direction: column; } .panel-left, .panel-right { width: 100%; } .panel-right { position: static; max-height: none; } .header { align-items: flex-start; } .header-actions { justify-content: flex-end; } }
+@media (max-width: 650px) {
+  .hero { padding: 20px 18px; margin-bottom: 18px; } .hero-code { display: none; } .hero h2 { font-size: 27px; letter-spacing: -1px; }
+  .header { padding: 20px 16px 16px; flex-direction: column; gap: 16px; } .workspace { padding: 0 16px 24px; }
+  .header-actions { justify-content: flex-start; gap: 6px; } .header-actions .btn { padding: 7px 10px; font-size: 11px; }
+  .toolbar { flex-wrap: wrap; gap: 12px; padding: 16px 0; } .month-nav { flex: 1; } .month-nav h2 { min-width: 0; flex: 1; font-size: 18px; }
+  .save-status { width: 100%; } .tabs { width: 100%; margin-bottom: 16px; } .tab { flex: 1; padding: 8px 4px; font-size: 12px; }
+  .month-stats { gap: 7px; } .stat { padding: 12px 10px; } .stat-value { font-size: 20px; }
+  .calendar-card { padding: 10px; border-radius: 12px; } .section-heading { padding: 4px; } .section-heading .muted { display: none; }
+  .calendar-grid { gap: 3px; } .cal-day { min-height: 80px; padding: 5px 3px; border-radius: 7px; } .cal-empty { min-height: 80px; }
+  .day-num { font-size: 12px; } .day-stats, .day-tag, .imp-tag { font-size: 8px; } .calendar-footer { padding: 12px 4px 4px; font-size: 10px; }
+  .panel-right { padding: 16px; border-radius: 12px; } .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .summary-card { padding: 15px; } .summary-big { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand"><div class="brand-mark" aria-hidden="true">//</div><div><div class="eyebrow">NEON // Personal workspace</div><h1>Hermit's Time Tracker</h1></div></div>
+  <div class="header-actions">
+    <button class="btn ghost" onclick="backupData()">Backup</button>
+    <button class="btn ghost" onclick="document.getElementById('restoreFile').click()">Restore</button>
+    <input type="file" id="restoreFile" accept=".json,application/json" class="hidden" onchange="restoreData(event)" aria-label="Restore tracker backup">
+    <button class="btn" onclick="exportExcel()">Export Excel ↗</button>
+    <button class="btn primary" onclick="openSheetsDialog()">Google Sheets ↗</button>
+  </div>
+</header>
+<main class="workspace">
+  <section class="hero" aria-label="Welcome to Hermit's Time Tracker"><div><div class="eyebrow">Hello friend</div><h2>Welcome to <span>Hermit's Time Tracker.</span></h2><p>Batches, learning and downtime. Your time, your way.</p></div><div class="hero-code" aria-hidden="true">[ BATCH / LEARN / RESET ]<b>YOUR TIME. YOUR NEXT LEVEL.</b></div></section>
+  <div class="toolbar">
+    <div class="month-nav"><h2 id="monthLabel"></h2><button class="btn nav-arrow" onclick="changeMonth(-1)" aria-label="Previous month">‹</button><button class="btn nav-arrow" onclick="changeMonth(1)" aria-label="Next month">›</button><button class="btn ghost" onclick="goToToday()">Today</button></div>
+    <div class="save-status" id="saveStatus" role="status" aria-live="polite"><span class="status-dot"></span><span id="saveStatusText">Saved on this device</span></div>
+  </div>
+  <nav class="tabs" aria-label="Tracker views">
+    <button class="tab active" data-view="calendar" aria-pressed="true" onclick="switchTab('calendar')">Calendar</button>
+    <button class="tab" data-view="sheet" aria-pressed="false" onclick="switchTab('sheet')">Daily sheet</button>
+    <button class="tab" data-view="summary" aria-pressed="false" onclick="switchTab('summary')">Summary</button>
+    <button class="tab" data-view="topics" aria-pressed="false" onclick="switchTab('topics')">Learning topics</button>
+  </nav>
+  <div class="main">
+    <div class="panel-left">
+      <section id="viewCalendar" aria-label="Monthly calendar">
+        <div class="month-stats" id="dayTotals"></div>
+        <div class="calendar-card"><div class="section-heading"><h3>// Your month, at a glance</h3><span class="muted">Select a day to log your time</span></div><div class="calendar-grid" id="calGrid"></div><div class="calendar-footer"><div class="legend"><span class="cat-teach">Batch</span><span class="cat-study">Learning</span><span class="cat-free">Free time</span></div><span>Sundays can be working days too.</span></div></div>
+      </section>
+      <section id="viewSheet" class="hidden" aria-label="Daily sheet"><p class="muted sheet-note">Work = batch + learning + miscellaneous. Logged time also includes breaks and free time.</p><div class="sheet-container"><table class="sheet-table" id="sheetTable"></table></div></section>
+      <section id="viewSummary" class="hidden" aria-label="Monthly summary"><div class="summary-grid" id="summaryGrid"></div></section>
+      <section id="viewTopics" class="hidden" aria-label="Learning topics"><div id="topicsContent"></div></section>
+    </div>
+    <aside class="panel-right hidden" id="entryPanel" aria-label="Edit selected day"></aside>
+  </div>
+</main>
+<dialog id="sheetsDialog" aria-labelledby="sheetsTitle">
+  <div class="entry-header"><h2 id="sheetsTitle">Your tracker, in Google Sheets</h2><button class="entry-close" onclick="document.getElementById('sheetsDialog').close()" aria-label="Close Google Sheets setup">×</button></div>
+  <div id="sheetsDialogContent"></div>
+  <div class="dialog-footer"><button class="btn" onclick="document.getElementById('sheetsDialog').close()">Close</button></div>
+</dialog>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<script>
+// The original monthly storage keys and day records remain compatible with backups.
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const CATEGORIES = { teaching: 'Batch / teaching', studying: 'Learning', misc: 'Miscellaneous', break: 'Break', free: 'Free time', pending_n: 'No batch · choose an activity' };
+const CATEGORY_CLASSES = { teaching: 'cat-teach', studying: 'cat-study', misc: 'cat-misc', break: 'cat-break', free: 'cat-free', pending_n: 'muted' };
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1wXUkmMr08thE6H77S1SPtjCx-aSrrgXTXSMdbyGA6jk/edit?gid=1741868527#gid=1741868527';
+const MFR_SLOTS = [
+  { start: '09:00', end: '09:10', type: 'auto', label: 'Free time', category: 'free' },
+  { start: '09:10', end: '09:30', type: 'auto', label: 'Huddle', category: 'misc' },
+  { start: '09:30', end: '11:30', type: 'ask', label: 'Morning batch', category: null },
+  { start: '11:30', end: '13:30', type: 'ask', label: 'Late morning batch', category: null },
+  { start: '13:30', end: '14:30', type: 'break', label: 'Lunch break', category: 'break' },
+  { start: '14:30', end: '16:30', type: 'ask', label: 'Afternoon batch', category: null },
+  { start: '16:30', end: '18:00', type: 'auto', label: 'Learning time', category: 'studying' }
+];
+const WEEKEND_SLOTS = [
+  { start: '09:30', end: '09:40', type: 'auto', label: 'Miscellaneous', category: 'misc' },
+  { start: '09:40', end: '10:00', type: 'auto', label: 'Huddle', category: 'misc' },
+  { start: '13:30', end: '14:30', type: 'break', label: 'Lunch break', category: 'break' }
+];
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let selectedDate = null;
+let currentView = 'calendar';
+let editingSlot = null;
+let toastTimer;
+let syncTimer;
+let syncBusy = false;
+let remoteReady = false;
+let syncFailures = 0;
+let syncedSheetUrl = SHEET_URL;
+let cloudConfigured = false;
+let cloudAuthenticated = false;
+const pendingMonths = new Map();
+const isGoogleHosted = !!(window.google && google.script && google.script.run);
+function canSyncSheets() { return isGoogleHosted || cloudConfigured; }
+
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function getStorageKey(y = currentYear, m = currentMonth) { return `tracker_${y}_${String(m + 1).padStart(2, '0')}`; }
+function getDateKey(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; }
+function getDaysInMonth() { return new Date(currentYear, currentMonth + 1, 0).getDate(); }
+function getDayOfWeek(dk) { const [y, m, d] = dk.split('-').map(Number); return new Date(y, m - 1, d).getDay(); }
+function isWeekend(dk) { return [0, 6].includes(getDayOfWeek(dk)); }
+function getSchedule(dk) { return isWeekend(dk) ? WEEKEND_SLOTS : MFR_SLOTS; }
+function getStatus(day, dk) { return day?.status || (day?.entries?.length ? 'working' : getDayOfWeek(dk) === 0 ? 'holiday' : null); }
+function timeToMinutes(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
+function minutesToTime(m) { return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+function validTime(t) { return typeof t === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t); }
+function validDate(dk) { if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return false; const [y,m,d] = dk.split('-').map(Number), date = new Date(y,m - 1,d); return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d; }
+function duration(e) { return Math.max(0, timeToMinutes(e.end) - timeToMinutes(e.start)); }
+function formatHours(mins) { const rounded = Math.round(mins); const h = Math.floor(rounded / 60), m = rounded % 60; return m ? (h ? `${h}h ${m}m` : `${m}m`) : `${h}h`; }
+function emptyTotals() { return { teaching: 0, studying: 0, misc: 0, break: 0, free: 0 }; }
+function workMinutes(t) { return t.teaching + t.studying + t.misc; }
+function loggedMinutes(t) { return workMinutes(t) + t.break + t.free; }
+function loadData(key = getStorageKey()) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return { days: {} };
+  const data = JSON.parse(raw);
+  if (!data || typeof data.days !== 'object' || Array.isArray(data.days) || !data.days) throw new Error('Invalid saved tracker data. Restore a valid backup before editing.');
+  return data;
+}
+function saveData(data, key = getStorageKey(), forceAll = false) {
+  const previous = loadData(key);
+  const changedDates = [...new Set([...Object.keys(previous.days), ...Object.keys(data.days)])].filter(dk => forceAll || JSON.stringify(previous.days[dk]) !== JSON.stringify(data.days[dk]));
+  try { localStorage.setItem(key, JSON.stringify(data)); }
+  catch (error) { showToast('Could not save on this device. Download a backup before closing.', true); throw error; }
+  if (canSyncSheets()) {
+    const earlier = pendingMonths.get(key);
+    pendingMonths.set(key, { month: data, dates: [...new Set([...(earlier?.dates || []), ...changedDates])] });
+    persistPendingSync();
+    setSaveStatus(cloudConfigured && !cloudAuthenticated ? 'Saved on device · sign in for Sheets' : 'Saved on device · waiting for Sheets', 'pending');
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(flushSheetSync, 900);
+  } else setSaveStatus('Saved on this device');
+}
+function ensureDay(data, dk = selectedDate) {
+  if (!data.days[dk]) data.days[dk] = { entries: [], status: null, manualMisc: 0, manualFree: 0 };
+  if (!Array.isArray(data.days[dk].entries)) data.days[dk].entries = [];
+  return data.days[dk];
+}
+function mutateDay(change) {
+  const data = loadData();
+  const day = ensureDay(data);
+  change(day);
+  saveData(data);
+  render();
+}
+function setSaveStatus(text, state = '') { document.getElementById('saveStatusText').textContent = text; document.getElementById('saveStatus').className = `save-status ${state}`; }
+function showToast(message, error = false) {
+  const toast = document.getElementById('toast'); toast.textContent = message; toast.className = `toast${error ? ' error' : ''}`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.add('hidden'), 4200);
+}
+function calcDayTotals(entries = [], manualMisc = 0, manualFree = 0) {
+  const totals = emptyTotals();
+  entries.forEach(e => { if (Object.hasOwn(totals, e.category) && validTime(e.start) && validTime(e.end)) totals[e.category] += duration(e); });
+  const miscMins = Math.min(Math.max(0, Number(manualMisc) || 0) * 60, totals.studying);
+  totals.misc += miscMins; totals.studying -= miscMins;
+  totals.free += Math.max(0, Number(manualFree) || 0) * 60;
+  return totals;
+}
+function getDayTotals(day, dk) { return getStatus(day, dk) === 'working' ? calcDayTotals(day?.entries, day?.manualMisc, day?.manualFree) : emptyTotals(); }
+function learningSessions(day) {
+  const entries = (day.entries || []).filter(e => e.category === 'studying');
+  const raw = entries.reduce((s, e) => s + duration(e), 0);
+  const adjusted = Math.max(0, raw - Math.max(0, Number(day.manualMisc) || 0) * 60);
+  return entries.map(e => ({ topic: e.topic || 'General learning', minutes: raw ? duration(e) * adjusted / raw : 0 })).filter(e => e.minutes > 0);
+}
+function getMonthlyTotals() {
+  const data = loadData(), totals = emptyTotals(), topics = Object.create(null);
+  let workingDays = 0;
+  for (let d = 1; d <= getDaysInMonth(); d++) {
+    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk];
+    if (getStatus(day, dk) !== 'working') continue;
+    workingDays++;
+    const dt = getDayTotals(day, dk);
+    Object.keys(totals).forEach(c => totals[c] += dt[c]);
+    learningSessions(day || {}).forEach(s => topics[s.topic] = (topics[s.topic] || 0) + s.minutes);
+  }
+  return { totals, topics, workingDays };
+}
+
+function render() {
+  document.getElementById('monthLabel').textContent = `${MONTHS[currentMonth]} ${currentYear}`;
+  renderCalendar(); renderSheet(); renderSummary(); renderTopics();
+  if (selectedDate) renderEntryPanel();
+}
+function renderCalendar() {
+  const data = loadData(), today = new Date(), firstDay = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7;
+  let html = DAYS.map((d, i) => `<div class="cal-header${i === 6 ? ' sunday' : ''}">${d}</div>`).join('');
+  html += '<div class="cal-empty" aria-hidden="true"></div>'.repeat(firstDay);
+  for (let d = 1; d <= getDaysInMonth(); d++) {
+    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk], status = getStatus(day, dk), totals = getDayTotals(day, dk);
+    const isToday = dk === getDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+    const classes = ['cal-day', status === 'holiday' ? 'sunday' : status || '', isToday ? 'today' : '', selectedDate === dk ? 'selected' : '', day?.important ? 'important' : ''].filter(Boolean).join(' ');
+    let stats = '';
+    if (status === 'working') {
+      stats = `<div class="day-stats">${totals.teaching ? `<span class="cat-teach">B ${formatHours(totals.teaching)}</span>` : ''}${totals.studying ? `<span class="cat-study">L ${formatHours(totals.studying)}</span>` : ''}${totals.free ? `<span class="cat-free">F ${formatHours(totals.free)}</span>` : ''}</div>`;
+    }
+    const tag = status === 'holiday' ? 'Holiday' : status === 'leave' ? 'Leave' : status === 'working' ? `${formatHours(loggedMinutes(totals))} logged` : 'Add time';
+    html += `<button class="${classes}" data-date="${dk}" onclick="selectDay('${dk}')" oncontextmenu="event.preventDefault(); toggleImportant('${dk}')" aria-label="${d} ${MONTHS[currentMonth]}, ${escapeHtml(tag)}" aria-pressed="${selectedDate === dk}"><span class="day-num">${d}</span>${stats}${day?.important ? `<span class="imp-tag">★ ${escapeHtml(day.task || 'Important')}</span>` : ''}<span class="day-tag">${tag}</span></button>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
+  const { totals } = getMonthlyTotals();
+  const cards = [['Batch / teaching', totals.teaching, 'cat-teach'], ['Learning', totals.studying, 'cat-study'], ['Free time', totals.free, 'cat-free'], ['Miscellaneous', totals.misc, 'cat-misc'], ['Work hours', workMinutes(totals), ''], ['Logged hours', loggedMinutes(totals), '']];
+  document.getElementById('dayTotals').innerHTML = cards.map(([label, mins, cls]) => `<div class="stat"><div class="stat-label">${label}</div><div class="stat-value ${cls}">${formatHours(mins)}</div></div>`).join('');
+}
+function selectDay(dk) {
+  selectedDate = dk; editingSlot = null;
+  document.getElementById('entryPanel').classList.remove('hidden'); render();
+  if (window.matchMedia('(max-width: 1100px)').matches) document.getElementById('entryPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function closeEntry() { selectedDate = null; editingSlot = null; document.getElementById('entryPanel').classList.add('hidden'); renderCalendar(); }
+function setStatus(status) {
+  editingSlot = null;
+  mutateDay(day => {
+    day.status = status;
+    if (status === 'working') getSchedule(selectedDate).filter(s => s.type !== 'ask').forEach(slot => {
+      if (!day.entries.some(e => timeToMinutes(e.start) < timeToMinutes(slot.end) && timeToMinutes(e.end) > timeToMinutes(slot.start))) day.entries.push({ start: slot.start, end: slot.end, category: slot.category, topic: null });
+    });
+  });
+}
+function renderEntryPanel() {
+  const data = loadData(), day = data.days[selectedDate] || { entries: [] }, status = getStatus(day, selectedDate), totals = getDayTotals(day, selectedDate);
+  const [y, m, d] = selectedDate.split('-').map(Number), dayName = DAYS[(getDayOfWeek(selectedDate) + 6) % 7];
+  let html = `<div class="entry-header"><div><div class="eyebrow">Daily time log</div><h3>${dayName}, ${d} ${MONTHS[m - 1]}</h3><div class="muted">${y} · ${isWeekend(selectedDate) ? 'Flexible weekend schedule' : '09:00–18:00 schedule'}</div></div><button class="entry-close" onclick="closeEntry()" aria-label="Close daily log">×</button></div>`;
+  html += `<div class="muted">Day type</div><div class="status-buttons">${[['working','Working'],['leave','Leave'],['holiday','Holiday']].map(([s, label]) => `<button class="btn${status === s ? ' active' : ''}" aria-pressed="${status === s}" onclick="setStatus('${s}')">${label}</button>`).join('')}</div>`;
+  if (day.important) html += `<div class="notice"><strong>★ ${escapeHtml(day.task || 'Important task')}</strong><div class="form-row"><button class="btn" onclick="completeTask('${selectedDate}')">Mark task done</button></div></div>`;
+  if (status === 'working') {
+    html += `<div class="day-overview"><span class="cat-teach">Batch<b>${formatHours(totals.teaching)}</b></span><span class="cat-study">Learning<b>${formatHours(totals.studying)}</b></span><span class="cat-free">Free<b>${formatHours(totals.free)}</b></span><span>Logged<b>${formatHours(loggedMinutes(totals))}</b></span></div>`;
+    html += isWeekend(selectedDate) ? renderWeekendEntries(day.entries || []) : renderWeekdayEntries(day.entries || []);
+    html += `<details class="adjustments"><summary>Hour adjustments${day.manualMisc || day.manualFree ? ' · applied' : ''}</summary><p class="form-help">Keep existing manual entries here. Use activity slots above for new learning and free time.</p><div class="form-row"><label class="field">Learning → miscellaneous (hours)<input class="form-input" type="number" min="0" max="24" step="0.25" value="${Number(day.manualMisc) || 0}" onchange="saveManualHours('manualMisc',this.value)"></label><label class="field">Additional free time (hours)<input class="form-input" type="number" min="0" max="24" step="0.25" value="${Number(day.manualFree) || 0}" onchange="saveManualHours('manualFree',this.value)"></label></div></details>`;
+  } else {
+    const message = !status ? 'Choose a day type to start logging.' : status === 'leave' ? 'A day off. Switch to Working to log activities.' : getDayOfWeek(selectedDate) === 0 ? 'Sunday is a holiday by default. Working today? Switch to Working to add batches, learning or free time.' : 'A holiday. Switch to Working if you need to log activities.';
+    html += `<div class="notice">${message}${day.entries?.length ? '<p class="form-help">Your previous entries are kept and excluded from totals while this day is off.</p>' : ''}</div>`;
+  }
+  html += `<div class="entry-footer"><button class="btn ghost danger" onclick="clearDay('${selectedDate}')">Clear day</button><button class="btn" onclick="toggleImportant('${selectedDate}')">${day.important ? 'Edit task' : '+ Important task'}</button></div><p class="form-help">Changes save automatically${canSyncSheets() ? ' and sync to Google Sheets when connected' : ' on this device'}.</p>`;
+  document.getElementById('entryPanel').innerHTML = html;
+}
+function renderActivity(entry, action = '') {
+  const label = entry.label || (entry.category === 'studying' && entry.topic ? `Learning · ${entry.topic}` : CATEGORIES[entry.category] || entry.category);
+  return `<div class="slot-card ${entry.category === 'pending_n' ? 'pending' : 'done'}${entry.category === 'free' ? ' free-slot' : ''}"><div class="slot-time">${entry.start}–${entry.end} · ${formatHours(duration(entry))}</div><div class="slot-title"><div class="slot-label ${CATEGORY_CLASSES[entry.category] || ''}">${escapeHtml(label)}</div></div>${action}</div>`;
+}
+function slotEntries(entries, slot) { return entries.filter(e => timeToMinutes(e.start) >= timeToMinutes(slot.start) && timeToMinutes(e.end) <= timeToMinutes(slot.end)).sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start)); }
+function renderWeekdayEntries(entries) {
+  let html = '';
+  MFR_SLOTS.forEach((slot, index) => {
+    const matching = slotEntries(entries, slot);
+    if (slot.type === 'break') { html += `<div class="break-card">${slot.start}–${slot.end} · Lunch break</div>`; return; }
+    const pending = matching.some(e => e.category === 'pending_n');
+    if (editingSlot === index || pending) { html += renderSlotEditor(slot, index, matching); return; }
+    if (slot.type === 'auto' && slot.category !== 'studying') {
+      html += renderActivity(matching[0] ? { ...matching[0], label: slot.label } : { ...slot }); return;
+    }
+    if (matching.length) {
+      matching.forEach((entry, i) => html += renderActivity(entry, i === matching.length - 1 ? `<div class="slot-actions"><button class="btn" onclick="editSlot(${index})">Edit activity</button></div>` : ''));
+    } else {
+      html += `<div class="slot-card pending"><div class="slot-time">${slot.start}–${slot.end} · ${formatHours(duration(slot))}</div><div class="slot-label" style="margin-bottom:10px">${slot.label}</div><div class="slot-actions"><button class="btn teaching" onclick="setSlotCategory(${index},'teaching')">Batch / teaching</button><button class="btn" onclick="setSlotCategory(${index},'pending_n')">No batch</button><button class="btn studying" onclick="editSlot(${index})">Learning</button><button class="btn free" onclick="setSlotCategory(${index},'free')">Free time</button></div></div>`;
+    }
+  });
+  return html;
+}
+function renderSlotEditor(slot, index, entries) {
+  const total = duration(slot), learning = entries.filter(e => e.category === 'studying').reduce((s, e) => s + duration(e), 0);
+  const topic = entries.find(e => e.category === 'studying')?.topic || '';
+  const learningDefault = entries.some(e => e.category === 'free') ? learning : learning || total;
+  return `<form class="slot-card pending" onsubmit="event.preventDefault(); saveSlotLearning(${index})"><div class="slot-time">${slot.start}–${slot.end} · ${formatHours(total)}</div><div class="slot-label">No batch? Make room for learning.</div><div class="form-row"><label class="field">Learning time (minutes)<input class="form-input" id="slotLearningMinutes_${index}" type="number" min="0" max="${total}" step="1" required value="${learningDefault}" oninput="updateFreeRemainder(${total},${index})"></label></div><div class="form-row"><label class="field">Learning topic (optional)<input class="form-input" id="slotLearningTopic_${index}" maxlength="200" placeholder="e.g. Python, networking, course work" value="${escapeHtml(topic)}"></label></div><p class="form-help" id="freeRemainder_${index}">${formatHours(total - learningDefault)} will be logged as free time.</p><div class="slot-actions"><button class="btn primary" type="submit">Save activity</button><button class="btn free" type="button" onclick="setSlotCategory(${index},'free')">All free time</button><button class="btn" type="button" onclick="setSlotCategory(${index},'misc')">Miscellaneous</button><button class="btn teaching" type="button" onclick="setSlotCategory(${index},'teaching')">Batch</button></div></form>`;
+}
+function editSlot(index) { editingSlot = index; renderEntryPanel(); document.getElementById(`slotLearningTopic_${index}`)?.focus(); }
+function updateFreeRemainder(total,index) { const mins = Number(document.getElementById(`slotLearningMinutes_${index}`).value); document.getElementById(`freeRemainder_${index}`).textContent = Number.isFinite(mins) && mins >= 0 && mins <= total ? `${formatHours(total - mins)} will be logged as free time.` : `Enter between 0 and ${total} minutes.`; }
+function replaceSlot(day, slot, replacements) { day.entries = day.entries.filter(e => !(timeToMinutes(e.start) >= timeToMinutes(slot.start) && timeToMinutes(e.end) <= timeToMinutes(slot.end))).concat(replacements); }
+function setSlotCategory(index, category) {
+  const slot = MFR_SLOTS[index]; editingSlot = null;
+  mutateDay(day => replaceSlot(day, slot, [{ start: slot.start, end: slot.end, category, topic: null }]));
+}
+function saveSlotLearning(index) {
+  const slot = MFR_SLOTS[index], mins = Number(document.getElementById(`slotLearningMinutes_${index}`).value), total = duration(slot), topic = document.getElementById(`slotLearningTopic_${index}`).value.trim();
+  if (!Number.isInteger(mins) || mins < 0 || mins > total) { showToast(`Enter between 0 and ${total} learning minutes.`, true); return; }
+  const entries = [], split = minutesToTime(timeToMinutes(slot.start) + mins);
+  if (mins > 0) entries.push({ start: slot.start, end: split, category: 'studying', topic: topic || null });
+  if (mins < total) entries.push({ start: split, end: slot.end, category: 'free', topic: null });
+  editingSlot = null; mutateDay(day => replaceSlot(day, slot, entries));
+}
+function weekendGaps(entries) {
+  const ranges = [['10:00','13:30'],['14:30','18:00']], gaps = [];
+  ranges.forEach(([start, end]) => {
+    let cursor = timeToMinutes(start), limit = timeToMinutes(end);
+    entries.filter(e => timeToMinutes(e.end) > cursor && timeToMinutes(e.start) < limit).sort((a,b) => timeToMinutes(a.start) - timeToMinutes(b.start)).forEach(e => {
+      const s = Math.max(timeToMinutes(start), timeToMinutes(e.start)), finish = Math.min(limit, timeToMinutes(e.end));
+      if (s > cursor) gaps.push({ start: minutesToTime(cursor), end: minutesToTime(s) });
+      cursor = Math.max(cursor, finish);
+    });
+    if (cursor < limit) gaps.push({ start: minutesToTime(cursor), end });
+  });
+  return gaps;
+}
+function renderWeekendEntries(entries) {
+  let html = '<p class="form-help">Add a batch, learning session or free time in the open periods. Lunch is 13:30–14:30.</p>';
+  const sorted = [...entries].sort((a,b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+  sorted.forEach(e => {
+    const fixed = WEEKEND_SLOTS.find(s => s.start === e.start && s.end === e.end);
+    if (fixed?.type === 'break') html += `<div class="break-card">13:30–14:30 · Lunch break</div>`;
+    else html += renderActivity(fixed ? { ...e, label: fixed.label } : e, !fixed ? `<div class="slot-actions"><button class="btn" onclick="removeEntry('${e.start}','${e.end}')">Remove</button></div>` : '');
+  });
+  const gaps = weekendGaps(entries), remaining = gaps.reduce((sum, gap) => sum + duration(gap), 0);
+  html += `<div class="remaining-bar">${remaining ? `${formatHours(remaining)} available for batches, learning or free time` : 'Your full day is logged.'}</div>`;
+  if (gaps.length) {
+    const gap = gaps[0];
+    html += `<form class="slot-card" onsubmit="event.preventDefault(); addWeekendEntry()"><div class="slot-label">Add an activity</div><div class="form-row"><label class="field">Start<input class="form-input" id="weekendStart" type="time" required value="${gap.start}"></label><label class="field">End<input class="form-input" id="weekendEnd" type="time" required value="${gap.end}"></label></div><div class="form-row"><label class="field">Activity<select class="form-input" id="weekendCategory" onchange="toggleWeekendTopic()"><option value="teaching">Batch / teaching</option><option value="studying">Learning (no batch)</option><option value="free">Free time (no batch)</option><option value="misc">Miscellaneous</option></select></label></div><div class="form-row hidden" id="weekendTopicRow"><label class="field">Learning topic (optional)<input class="form-input" id="weekendTopic" maxlength="200" placeholder="What are you learning?"></label></div><div class="slot-actions" style="margin-top:12px"><button class="btn primary" type="submit">Add activity</button></div></form>`;
+  }
+  return html;
+}
+function toggleWeekendTopic() { document.getElementById('weekendTopicRow').classList.toggle('hidden', document.getElementById('weekendCategory').value !== 'studying'); }
+function addWeekendEntry() {
+  const start = document.getElementById('weekendStart').value, end = document.getElementById('weekendEnd').value, category = document.getElementById('weekendCategory').value;
+  if (!validTime(start) || !validTime(end) || timeToMinutes(start) >= timeToMinutes(end)) { showToast('Choose an end time after the start time.', true); return; }
+  if (timeToMinutes(start) < 600 || timeToMinutes(end) > 1080) { showToast('Activities must be between 10:00 and 18:00.', true); return; }
+  if (timeToMinutes(start) < 870 && timeToMinutes(end) > 810) { showToast('Lunch is 13:30–14:30. Split your activity around it.', true); return; }
+  const data = loadData(), day = ensureDay(data);
+  if (day.entries.some(e => timeToMinutes(start) < timeToMinutes(e.end) && timeToMinutes(end) > timeToMinutes(e.start))) { showToast('That time overlaps an existing activity.', true); return; }
+  day.entries.push({ start, end, category, topic: category === 'studying' ? document.getElementById('weekendTopic').value.trim() || null : null });
+  saveData(data); render();
+}
+function removeEntry(start, end) { mutateDay(day => day.entries = day.entries.filter(e => !(e.start === start && e.end === end))); }
+function saveManualHours(field, value) {
+  const hours = Number(value), day = loadData().days[selectedDate];
+  if (!Number.isFinite(hours) || hours < 0 || hours > 24) { showToast('Enter hours between 0 and 24.', true); renderEntryPanel(); return; }
+  if (field === 'manualMisc' && hours * 60 > calcDayTotals(day.entries).studying) { showToast('You can only reclassify learning time already logged.', true); renderEntryPanel(); return; }
+  if (field === 'manualFree' && loggedMinutes(calcDayTotals(day.entries, day.manualMisc)) + hours * 60 > 1440) { showToast('A day cannot contain more than 24 logged hours.', true); renderEntryPanel(); return; }
+  mutateDay(record => record[field] = hours);
+}
+function toggleImportant(dk) {
+  const data = loadData(), day = ensureDay(data, dk), task = prompt('Important task for this day:', day.task || '');
+  if (task === null) return;
+  day.task = task.trim().slice(0, 200) || null; day.important = !!day.task; saveData(data); render();
+}
+function completeTask(dk) { const data = loadData(); if (data.days[dk]) { data.days[dk].important = false; data.days[dk].task = null; saveData(data); render(); } }
+function clearDay(dk) {
+  if (!confirm('Clear this day’s activities, adjustments and task?')) return;
+  const data = loadData(); delete data.days[dk]; editingSlot = null; saveData(data); render(); showToast('Day cleared.');
+}
+function getMonthRows() {
+  const data = loadData(), rows = [];
+  for (let d = 1; d <= getDaysInMonth(); d++) {
+    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk], status = getStatus(day, dk), totals = getDayTotals(day, dk);
+    const activities = status === 'working' ? [...(day?.entries || [])].sort((a,b) => timeToMinutes(a.start) - timeToMinutes(b.start)).map(e => `${e.start}–${e.end} ${CATEGORIES[e.category] || e.category}${e.topic ? ': ' + e.topic : ''}`).join('\n') : '';
+    rows.push({ date: dk, day: DAYS[(getDayOfWeek(dk) + 6) % 7], status: status || 'Not logged', activities, totals });
+  }
+  return rows;
+}
+function renderSheet() {
+  const headers = ['Date','Day type','Activities','Batch','Learning','Misc','Break','Free','Work','Logged'];
+  let html = `<thead><tr>${headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>`;
+  getMonthRows().forEach(row => {
+    const t = row.totals;
+    html += `<tr><td>${row.date}<br><span class="muted">${row.day}</span></td><td>${escapeHtml(row.status)}</td><td class="activity-cell">${escapeHtml(row.activities).replace(/\n/g, '<br>') || '—'}</td><td class="cat-teach">${formatHours(t.teaching)}</td><td class="cat-study">${formatHours(t.studying)}</td><td class="cat-misc">${formatHours(t.misc)}</td><td class="cat-break">${formatHours(t.break)}</td><td class="cat-free">${formatHours(t.free)}</td><td>${formatHours(workMinutes(t))}</td><td>${formatHours(loggedMinutes(t))}</td></tr>`;
+  });
+  const { totals: t } = getMonthlyTotals();
+  html += `<tr class="total-row"><td colspan="3">Monthly total</td>${[t.teaching,t.studying,t.misc,t.break,t.free,workMinutes(t),loggedMinutes(t)].map(v => `<td>${formatHours(v)}</td>`).join('')}</tr></tbody>`;
+  document.getElementById('sheetTable').innerHTML = html;
+}
+function renderSummary() {
+  const { totals: t, workingDays } = getMonthlyTotals(), logged = loggedMinutes(t);
+  const cards = [['Batch / teaching',t.teaching,'cat-teach'],['Learning',t.studying,'cat-study'],['Miscellaneous',t.misc,'cat-misc'],['Breaks',t.break,'cat-break'],['Free time',t.free,'cat-free'],['Work hours',workMinutes(t),''],['Logged hours',logged,'']];
+  document.getElementById('summaryGrid').innerHTML = cards.map(([label, mins, cls], i) => `<div class="summary-card"><h3>${label}</h3><div class="summary-big ${cls}">${formatHours(mins)}</div><div class="summary-sub">${i < 5 ? `${logged ? (mins / logged * 100).toFixed(1) : '0.0'}% of logged time` : i === 5 ? 'Batch + learning + miscellaneous' : 'Includes breaks and free time'}</div></div>`).join('') + `<div class="summary-card"><h3>Working days</h3><div class="summary-big">${workingDays}</div><div class="summary-sub">Including Sundays marked as working</div></div>`;
+}
+function renderTopics() {
+  const data = loadData(), topicDays = new Map();
+  for (let d = 1; d <= getDaysInMonth(); d++) {
+    const dk = getDateKey(currentYear, currentMonth, d), day = data.days[dk];
+    if (getStatus(day, dk) !== 'working') continue;
+    learningSessions(day || {}).forEach(s => { if (!topicDays.has(s.topic)) topicDays.set(s.topic, []); topicDays.get(s.topic).push({ date: dk, minutes: s.minutes }); });
+  }
+  const sorted = [...topicDays].sort((a,b) => b[1].reduce((s,x) => s + x.minutes,0) - a[1].reduce((s,x) => s + x.minutes,0));
+  const max = sorted.length ? sorted[0][1].reduce((s,x) => s + x.minutes,0) : 1;
+  document.getElementById('topicsContent').innerHTML = sorted.length ? sorted.map(([topic, sessions]) => {
+    const total = sessions.reduce((s,x) => s + x.minutes,0);
+    return `<div class="topic-card"><div class="topic-top"><span>${escapeHtml(topic)}</span><span>${formatHours(total)}</span></div><div class="topic-bar"><span style="width:${total / max * 100}%"></span></div><div class="topic-sessions">${sessions.map(s => `<button class="btn" onclick="switchTab('calendar'); selectDay('${s.date}')">${s.date.slice(8)} ${MONTHS[currentMonth].slice(0,3)} · ${formatHours(s.minutes)}</button>`).join('')}</div></div>`;
+  }).join('') : '<div class="empty-state"><h3>A little learning adds up.</h3><p class="muted">Log a learning activity on any working day to see your topics here.</p></div>';
+}
+function changeMonth(dir) { const date = new Date(currentYear, currentMonth + dir, 1); currentYear = date.getFullYear(); currentMonth = date.getMonth(); closeEntry(); render(); }
+function goToToday() { const today = new Date(); currentYear = today.getFullYear(); currentMonth = today.getMonth(); switchTab('calendar'); selectDay(getDateKey(currentYear,currentMonth,today.getDate())); }
+function switchTab(view) {
+  currentView = view;
+  document.querySelectorAll('.tab').forEach(t => { const active = t.dataset.view === view; t.classList.toggle('active',active); t.setAttribute('aria-pressed',String(active)); });
+  ['calendar','sheet','summary','topics'].forEach(v => document.getElementById(`view${v[0].toUpperCase() + v.slice(1)}`).classList.toggle('hidden', v !== view));
+  document.getElementById('entryPanel').classList.toggle('hidden', view !== 'calendar' || !selectedDate);
+}
+function allStoredMonths() { return Object.keys(localStorage).filter(k => /^tracker_\d{4}_\d{2}$/.test(k)); }
+function backupData() {
+  const backup = Object.fromEntries(allStoredMonths().map(k => [k,loadData(k)]));
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{ type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = `work-tracker-backup-${getDateKey(new Date().getFullYear(),new Date().getMonth(),new Date().getDate())}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+function validateBackup(data) {
+  if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error('Expected a tracker backup.');
+  const months = Object.entries(data).filter(([k]) => /^tracker_\d{4}_(0[1-9]|1[0-2])$/.test(k));
+  if (!months.length) throw new Error('This file has no tracker months.');
+  months.forEach(([key,month]) => {
+    if (!month || !month.days || Array.isArray(month.days) || typeof month.days !== 'object') throw new Error(`Invalid month: ${key}`);
+    Object.entries(month.days).forEach(([dk,day]) => {
+      if (!validDate(dk) || `tracker_${dk.slice(0,4)}_${dk.slice(5,7)}` !== key || !day || Array.isArray(day) || typeof day !== 'object' || !Array.isArray(day.entries)) throw new Error('Invalid day record.');
+      if (day.status && !['working','holiday','leave'].includes(day.status)) throw new Error('Invalid day type.');
+      ['manualMisc','manualFree'].forEach(f => { if (day[f] != null && (!Number.isFinite(Number(day[f])) || Number(day[f]) < 0 || Number(day[f]) > 24)) throw new Error('Invalid manual hours.'); });
+      day.entries.forEach(e => { if (!e || !validTime(e.start) || !validTime(e.end) || duration(e) <= 0 || !Object.hasOwn(CATEGORIES,e.category) || e.topic != null && typeof e.topic !== 'string') throw new Error('Invalid activity.'); });
+    });
+  });
+  return months;
+}
+async function restoreData(event) {
+  const file = event.target.files[0]; event.target.value = ''; if (!file) return;
+  try {
+    const months = validateBackup(JSON.parse(await file.text()));
+    if (!confirm(`Restore ${months.length} month(s)? Matching months on this device will be replaced.`)) return;
+    months.forEach(([key,data]) => saveData(data,key,true)); render(); showToast('Backup restored.');
+  } catch (error) { showToast(error.message || 'Could not restore that backup.',true); }
+}
+function exportExcel() {
+  if (!window.XLSX) { showToast('Excel export needs an internet connection to load. Your tracker data is still saved.',true); return; }
+  const monthName = `${MONTHS[currentMonth]} ${currentYear}`, { totals: t, topics } = getMonthlyTotals(), logged = loggedMinutes(t), rows = getMonthRows();
+  const sheet = [['Date','Day','Day type','Activities','Batch hours','Learning hours','Misc hours','Break hours','Free hours','Work hours','Logged hours']];
+  rows.forEach(r => sheet.push([r.date,r.day,r.status,r.activities,...[r.totals.teaching,r.totals.studying,r.totals.misc,r.totals.break,r.totals.free,workMinutes(r.totals),loggedMinutes(r.totals)].map(v => v / 60)]));
+  sheet.push(['MONTHLY TOTAL','','','',...[t.teaching,t.studying,t.misc,t.break,t.free,workMinutes(t),logged].map(v => v / 60)]);
+  const summary = [['Category','Hours','% of logged time'],...Object.keys(t).map(c => [CATEGORIES[c],t[c] / 60,logged ? t[c] / logged : 0]),[],['Work hours',workMinutes(t) / 60],['Logged hours',logged / 60],[],['Learning topic','Hours'],...Object.entries(topics).map(([topic,minutes]) => [topic,minutes / 60])];
+  const wb = XLSX.utils.book_new(), daily = XLSX.utils.aoa_to_sheet(sheet);
+  daily['!cols'] = [{ wch: 12 },{ wch: 7 },{ wch: 12 },{ wch: 60 },...Array.from({length:7},() => ({wch:15}))];
+  for (let row = 2; row <= sheet.length; row++) for (let column = 4; column <= 10; column++) { const cell = daily[`${String.fromCharCode(65 + column)}${row}`]; if (cell?.t === 'n') cell.z = '0.00'; }
+  const summarySheet = XLSX.utils.aoa_to_sheet(summary);
+  for (let row = 2; row <= 6; row++) if (summarySheet[`C${row}`]) summarySheet[`C${row}`].z = '0.0%';
+  XLSX.utils.book_append_sheet(wb,daily,monthName); XLSX.utils.book_append_sheet(wb,summarySheet,'Summary'); XLSX.writeFile(wb,`${monthName.replace(' ','_')}_Tracker.xlsx`);
+}
+
+// Both hosting options acknowledge writes. Google credentials stay on the server.
+async function cloudRequest(operation, payload) {
+  const response = await fetch('/api/sheets', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation, payload }), signal: AbortSignal.timeout(60000) });
+  const result = await response.json();
+  if (!response.ok) { const error = new Error(result.error || 'Google Sheets could not be reached.'); error.status = response.status; throw error; }
+  return result;
+}
+function sheetCall(name, payload) {
+  if (isGoogleHosted) return new Promise((resolve,reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](payload));
+  return cloudRequest(name === 'loadTrackerData' ? 'load' : 'save',payload);
+}
+async function initializeTransport() {
+  if (isGoogleHosted) { await initializeSheets(); return; }
+  if (!['http:','https:'].includes(window.location?.protocol)) return;
+  try {
+    const response = await fetch('/api/sheets', { credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return;
+    const status = await response.json();
+    cloudConfigured = !!status.configured; cloudAuthenticated = !!status.authenticated;
+    if (cloudConfigured) {
+      if (cloudAuthenticated) await initializeSheets();
+      else setSaveStatus('Sheets locked · sign in to connect','pending');
+    }
+  } catch { /* Local use and offline use keep their saved device data. */ }
+}
+async function initializeSheets() {
+  if (!canSyncSheets()) return;
+  setSaveStatus('Connecting to Google Sheets…','pending');
+  try {
+    const queued = JSON.parse(localStorage.getItem('work_tracker_pending_sync') || '[]');
+    queued.forEach(item => {
+      if (item && typeof item.key === 'string' && Array.isArray(item.dates) && localStorage.getItem(item.key) && !pendingMonths.has(item.key)) pendingMonths.set(item.key, { month: loadData(item.key), dates: item.dates });
+    });
+    const remote = await sheetCall('loadTrackerData',null);
+    if (typeof remote.spreadsheetUrl === 'string' && remote.spreadsheetUrl.startsWith('https://docs.google.com/spreadsheets/d/')) syncedSheetUrl = remote.spreadsheetUrl;
+    // Pending local edits take precedence. Opening the page does not upload older cached data.
+    Object.entries(remote.months || {}).forEach(([key,month]) => {
+      if (!pendingMonths.has(key)) localStorage.setItem(key,JSON.stringify(month));
+    });
+    // Keep pending edits across reloads and browser restarts.
+    remoteReady = true; render();
+    if (pendingMonths.size) flushSheetSync(); else setSaveStatus('Connected · saved to Google Sheets');
+  } catch (error) { setSaveStatus('Sheets unavailable · using device data','error'); showToast('Could not connect to Sheets. Your local data is available. Retry from Google Sheets.',true); }
+}
+async function flushSheetSync() {
+  if (!canSyncSheets() || !remoteReady || syncBusy || !pendingMonths.size) return;
+  if (!navigator.onLine) { setSaveStatus('Offline · changes waiting for Sheets','pending'); return; }
+  syncBusy = true; setSaveStatus('Saving to Google Sheets…','pending');
+  const [key,change] = pendingMonths.entries().next().value;
+  try {
+    const result = await sheetCall('saveTrackerMonth',{ key, month: change.month, changedDates: change.dates });
+    if (pendingMonths.get(key) === change) {
+      pendingMonths.delete(key);
+      if (result.month) localStorage.setItem(key,JSON.stringify(result.month));
+      render();
+    }
+    syncFailures = 0;
+    persistPendingSync();
+    setSaveStatus(pendingMonths.size ? 'Changes waiting for Sheets' : 'Saved to Google Sheets',pendingMonths.size ? 'pending' : '');
+  } catch (error) {
+    if (error.status === 401) { cloudAuthenticated = false; remoteReady = false; }
+    syncFailures++; setSaveStatus('Saved on device · Sheets sync failed','error');
+    if (syncFailures === 1) showToast(error.status === 401 ? 'Sign in again to sync your saved changes.' : 'Google Sheets sync failed. Changes are kept on this device and will retry.',true);
+  } finally {
+    syncBusy = false;
+    if (pendingMonths.size && remoteReady) { clearTimeout(syncTimer); syncTimer = setTimeout(flushSheetSync,syncFailures ? Math.min(60000,5000 * 2 ** Math.min(syncFailures - 1,4)) : 100); }
+  }
+}
+function persistPendingSync() { localStorage.setItem('work_tracker_pending_sync',JSON.stringify([...pendingMonths].map(([key,change]) => ({ key, dates: change.dates })))); }
+function openSheetsDialog() {
+  const content = document.getElementById('sheetsDialogContent');
+  if (cloudConfigured && !cloudAuthenticated) content.innerHTML = `<p>Connect your private time log to Google Sheets. Enter the tracker password to load your saved days and sync new edits.</p><form onsubmit="event.preventDefault(); signInToSheets()"><label class="field" style="margin-top:18px">Tracker password<input class="form-input" type="password" id="cloudPassword" autocomplete="current-password" required maxlength="256"></label><p class="connection-error" id="cloudLoginError" role="alert"></p><button class="btn primary" id="cloudLoginButton" type="submit">Connect Google Sheets</button></form><p>Changes already waiting on this device will sync after you connect.</p>`;
+  else if (canSyncSheets()) content.innerHTML = `<p>Your working days, Sundays, learning, free time and totals sync automatically to the <strong>Tracker Daily</strong> tab.</p><p>Each date has one row. Editing a date updates its row.</p><p><a href="${escapeHtml(syncedSheetUrl)}" target="_blank" rel="noopener">Open your daily tracker sheet ↗</a></p><div class="cloud-footer"><button class="btn primary" onclick="retrySheets()">Retry sync</button>${cloudConfigured ? '<button class="btn ghost" onclick="signOutOfSheets()">Disconnect</button>' : ''}</div>`;
+  else content.innerHTML = `<p>Google Sheets sync can be enabled when this tracker is hosted on Vercel, or run as a private Google Apps Script web app.</p><p>Your daily rows include batches, learning, free time and totals. Follow the deployment guide included with the project to connect <a href="${SHEET_URL}" target="_blank" rel="noopener">your spreadsheet</a>.</p><p><strong>Currently saving on this device.</strong> Download a backup to transfer your existing days to the hosted tracker.</p><div class="cloud-footer"><button class="btn" onclick="backupData()">Download existing data</button></div>`;
+  document.getElementById('sheetsDialog').showModal();
+}
+async function signInToSheets() {
+  const button = document.getElementById('cloudLoginButton'), password = document.getElementById('cloudPassword').value;
+  button.disabled = true; document.getElementById('cloudLoginError').textContent = '';
+  try { await cloudRequest('login',{ password }); cloudAuthenticated = true; document.getElementById('sheetsDialog').close(); await initializeSheets(); }
+  catch (error) { document.getElementById('cloudLoginError').textContent = error.message; button.disabled = false; }
+}
+async function signOutOfSheets() {
+  if (syncBusy || pendingMonths.size) { showToast('Let pending changes finish syncing before disconnecting.',true); return; }
+  try { await cloudRequest('logout',null); cloudAuthenticated = false; remoteReady = false; setSaveStatus('Saved on device · Sheets disconnected','pending'); document.getElementById('sheetsDialog').close(); }
+  catch (error) { showToast(error.message,true); }
+}
+function retrySheets() { document.getElementById('sheetsDialog').close(); if (remoteReady) flushSheetSync(); else initializeSheets(); }
+window.addEventListener('online',() => { if (remoteReady) flushSheetSync(); else initializeTransport(); });
+window.addEventListener('beforeunload',event => { if (canSyncSheets() && pendingMonths.size) { persistPendingSync(); event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('storage',event => { if (event.key?.startsWith('tracker_') && !syncBusy) render(); });
+document.addEventListener('keydown',event => { if (event.key === 'Escape' && !document.getElementById('sheetsDialog').open) closeEntry(); });
+try { render(); initializeTransport(); } catch (error) { setSaveStatus('Saved data needs attention','error'); showToast(error.message,true); }
+</script>
+</body>
+</html>

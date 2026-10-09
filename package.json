@@ -1,0 +1,12 @@
+{
+  "name": "neon-work-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A cyberpunk personal work and learning tracker with optional Google Sheets sync.",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "dev": "node scripts/dev.cjs",
+    "test": "node --test tests/tracker.test.cjs tests/api.test.cjs",
+    "test:browser": "node tests/browser-check.cjs"
+  }
+}

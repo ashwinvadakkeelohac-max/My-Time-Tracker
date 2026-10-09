@@ -1,0 +1,5 @@
+.env*
+google-sheets/
+tests/
+README.md
+DEPLOY.md
